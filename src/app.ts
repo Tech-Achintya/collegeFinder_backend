@@ -32,6 +32,8 @@ import collegeRoutes from './routes/collegeRoutes';
 import compareRoutes from './routes/compareRoutes';
 import predictorRoutes from './routes/predictorRoutes';
 import filterRoutes from './routes/filterRoutes';
+import externalRoutes from './routes/externalRoutes';
+
 
 // Middleware imports
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -49,6 +51,25 @@ const PORT = process.env.PORT || 5000;
 // Security headers (protects against common web vulnerabilities)
 app.use(helmet());
 
+// GZIP compression for smaller response sizes
+app.use(compression());
+
+// HTTP request logging (use 'combined' in production for more details)
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Parse JSON request bodies (limit to 10kb to prevent abuse)
+app.use(express.json({ limit: '10kb' }));
+
+// Rate limiting for external/public endpoints (more relaxed)
+const externalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute (allows for 1s polling)
+  message: { success: false, error: 'Too many requests to the public API.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/external', externalLimiter, externalRoutes);
+
 // CORS configuration — allow frontend origin
 app.use(
   cors({
@@ -59,16 +80,8 @@ app.use(
   })
 );
 
-// GZIP compression for smaller response sizes
-app.use(compression());
 
-// HTTP request logging (use 'combined' in production for more details)
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-
-// Parse JSON request bodies (limit to 10kb to prevent abuse)
-app.use(express.json({ limit: '10kb' }));
-
-// Rate limiting — prevents API abuse
+// General Rate limiting — prevents API abuse
 // 100 requests per 15 minutes per IP
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -78,6 +91,7 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use('/api/', limiter);
+
 
 // =============================================
 // API ROUTES
